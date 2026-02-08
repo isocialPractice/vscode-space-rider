@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Space Rider</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+  canvas { display: block; }
+
+  #hud {
+    position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 10;
+    padding: 18px 28px; display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .hud-block { display: flex; flex-direction: column; gap: 4px; }
+  .hud-label { font-size: 10px; color: #0ff8; letter-spacing: 3px; text-transform: uppercase; }
+  .hud-value { font-size: 26px; font-weight: bold; color: #0ff; text-shadow: 0 0 12px #0ff, 0 0 24px #0088ff; }
+  .hud-value.speed { color: #f0f; text-shadow: 0 0 12px #f0f, 0 0 24px #8800ff; }
+  .hud-value.health { color: #0f8; text-shadow: 0 0 12px #0f8, 0 0 24px #00ff88; }
+
+  #shield-bar-container {
+    position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+    width: 260px; height: 8px; background: #0f82; border: 1px solid #0f84;
+    border-radius: 4px; z-index: 10; pointer-events: none;
+  }
+  #shield-bar {
+    height: 100%; background: linear-gradient(90deg, #0f8, #0ff);
+    border-radius: 4px; transition: width 0.3s; box-shadow: 0 0 10px #0f8;
+  }
+
+  #overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 20; background: radial-gradient(ellipse at center, #0a0a2e 0%, #000010 70%);
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 {
+    font-size: 52px; color: #0ff; text-shadow: 0 0 30px #0ff, 0 0 60px #0088ff, 0 0 90px #0044ff;
+    letter-spacing: 8px; margin-bottom: 10px;
+  }
+  #overlay .subtitle {
+    font-size: 14px; color: #f0f; letter-spacing: 6px; margin-bottom: 40px;
+    text-shadow: 0 0 10px #f0f;
+  }
+  #overlay .instructions {
+    color: #0ff8; font-size: 12px; line-height: 2; letter-spacing: 1px; text-align: center;
+    margin-bottom: 30px;
+  }
+  #overlay .instructions span { color: #0ff; font-weight: bold; }
+  #overlay .start-prompt {
+    font-size: 18px; color: #0f8; letter-spacing: 4px; animation: pulse 1.5s infinite;
+    cursor: pointer; pointer-events: all;
+  }
+  #overlay .final-score {
+    font-size: 36px; color: #f0f; margin: 15px 0;
+    text-shadow: 0 0 20px #f0f, 0 0 40px #8800ff;
+  }
+  #overlay .stats { color: #0ff8; font-size: 13px; line-height: 2.2; margin-bottom: 20px; }
+  #overlay .stats span { color: #0ff; }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  #damage-flash {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 15; opacity: 0;
+    background: radial-gradient(ellipse at center, #ff000040, #ff000010);
+    transition: opacity 0.1s;
+  }
+
+  #speed-lines {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none; z-index: 5; opacity: 0;
+    background: repeating-conic-gradient(from 0deg, transparent 0deg, transparent 8deg, #0ff04 9deg, transparent 10deg);
+    transition: opacity 0.5s;
+  }
+
+  /* Debug overlay */
+  #debug-overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 20; background: radial-gradient(ellipse at center, #0a0a2e 0%, #000010 70%);
+  }
+  #debug-overlay.hidden { display: none; }
+  #debug-overlay h1 {
+    font-size: 52px; color: #0ff; text-shadow: 0 0 30px #0ff, 0 0 60px #0088ff, 0 0 90px #0044ff;
+    letter-spacing: 8px; margin-bottom: 10px;
+  }
+  #debug-overlay .subtitle {
+    font-size: 14px; color: #f0f; letter-spacing: 6px; margin-bottom: 40px;
+    text-shadow: 0 0 10px #f0f;
+  }
+  #debug-overlay .start-prompt {
+    font-size: 14px; color: #0f8; letter-spacing: 3px; animation: pulse 1.5s infinite;
+    margin-top: 10px;
+  }
+  .debug-menu { display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px; width: 380px; }
+  .debug-option {
+    padding: 12px 20px; font-size: 14px; color: #0ff6; letter-spacing: 2px;
+    cursor: pointer; border: 1px solid transparent; border-radius: 2px;
+    transition: all 0.15s; pointer-events: all;
+  }
+  .debug-option:hover, .debug-option.selected {
+    color: #0ff; border-color: #0ff8;
+    background: rgba(0, 255, 255, 0.05);
+    text-shadow: 0 0 10px #0ff;
+    box-shadow: 0 0 15px rgba(0,255,255,0.1), inset 0 0 15px rgba(0,255,255,0.05);
+  }
+  .debug-key { color: #f0f; margin-right: 12px; text-shadow: 0 0 8px #f0f; }
+  .debug-name { font-weight: bold; }
+  .debug-desc {
+    display: block; font-size: 10px; color: #0ff3; letter-spacing: 1px;
+    margin-top: 4px; margin-left: 40px;
+  }
+
+  /* Collision / destruction tracker */
+  #collision-tracker {
+    position: absolute; bottom: 70px; right: 24px; z-index: 12;
+    pointer-events: none; font-family: 'Courier New', monospace;
+    padding: 14px 20px; border: 1px solid #0f84;
+    background: rgba(0, 17, 10, 0.6); border-radius: 2px;
+    display: none;
+    box-shadow: 0 0 20px rgba(0,255,136,0.12), inset 0 0 30px rgba(0,0,0,0.5);
+  }
+  .tracker-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .tracker-rec { color: #f44; font-size: 8px; animation: pulse 1s infinite; }
+  .tracker-label { font-size: 9px; color: rgba(0,255,136,0.4); letter-spacing: 3px; }
+  .tracker-value {
+    font-size: 16px; color: #0f8;
+    text-shadow: 0 0 10px #0f8, 0 0 20px rgba(0,255,136,0.4);
+    letter-spacing: 1px;
+  }
+
+  /* Debug mode indicator */
+  #debug-indicator {
+    position: absolute; top: 70px; left: 50%; transform: translateX(-50%);
+    z-index: 11; pointer-events: none; font-family: 'Courier New', monospace;
+    font-size: 11px; color: #f0f8; letter-spacing: 3px;
+    text-shadow: 0 0 8px #f0f; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="overlay">
+  <h1>SPACE RIDER</h1>
+  <div class="subtitle">WARP TUNNEL PROTOCOL v2.7</div>
+  <div class="instructions">
+    <span>W/A/S/D</span> or <span>ARROWS</span> &mdash; steer ship<br/>
+    <span>SHIFT</span> &mdash; boost &nbsp; | &nbsp; <span>SPACE</span> &mdash; fire pulse cannon<br/>
+    <span>Q / E</span> &mdash; barrel roll<br/>
+    Dodge obstacles &bull; Collect energy orbs &bull; Survive!
+  </div>
+  <div class="start-prompt" id="start-btn">[ PRESS ENTER TO LAUNCH ]</div>
+</div>
+
+<div id="hud">
+  <div class="hud-block">
+    <div class="hud-label">Score</div>
+    <div class="hud-value" id="score-val">0</div>
+  </div>
+  <div class="hud-block" style="align-items:center;">
+    <div class="hud-label">Distance</div>
+    <div class="hud-value speed" id="dist-val">0 km</div>
+  </div>
+  <div class="hud-block" style="align-items:flex-end;">
+    <div class="hud-label">Shield</div>
+    <div class="hud-value health" id="shield-val">100%</div>
+  </div>
+</div>
+
+<div id="shield-bar-container"><div id="shield-bar" style="width:100%"></div></div>
+<div id="damage-flash"></div>
+<div id="speed-lines"></div>
+
+<div id="debug-overlay" class="hidden">
+  <h1>SPACE RIDER</h1>
+  <div class="subtitle">DEBUG PROTOCOL v0.1</div>
+  <div class="debug-menu" id="debug-menu">
+    <div class="debug-option" data-index="0">
+      <span class="debug-key">[1]</span>
+      <span class="debug-name">MINE FIELD</span>
+      <span class="debug-desc">Only mines. Pure evasion.</span>
+    </div>
+    <div class="debug-option" data-index="1">
+      <span class="debug-key">[2]</span>
+      <span class="debug-name">ORB HARVEST</span>
+      <span class="debug-desc">Only orbs. Collect them all.</span>
+    </div>
+    <div class="debug-option" data-index="2">
+      <span class="debug-key">[3]</span>
+      <span class="debug-name">COLLISION COURSE</span>
+      <span class="debug-desc">Hit obstacles. Track every impact.</span>
+    </div>
+    <div class="debug-option" data-index="3">
+      <span class="debug-key">[4]</span>
+      <span class="debug-name">MINE SWEEPER</span>
+      <span class="debug-desc">Ram mines. Log collisions.</span>
+    </div>
+    <div class="debug-option" data-index="4">
+      <span class="debug-key">[5]</span>
+      <span class="debug-name">CHAOS PROTOCOL</span>
+      <span class="debug-desc">Everything. Everywhere. All at once.</span>
+    </div>
+  </div>
+  <div class="start-prompt">[ &#8593;&#8595; SELECT &bull; ENTER LAUNCH ]</div>
+</div>
+
+<div id="collision-tracker">
+  <div class="tracker-header">
+    <span class="tracker-rec">&#9679; REC</span>
+    <span class="tracker-label">HULL DIAGNOSTIC</span>
+  </div>
+  <div class="tracker-value" id="tracker-display">Collisions Detected: 0</div>
+</div>
+
+<div id="debug-indicator"></div>
+
+<script>
+// ===== Minimal Three.js-like 3D engine (inline, no dependencies) =====
+// We build a lightweight WebGL renderer to avoid CSP / CDN issues inside VS Code webviews.
+
+const canvas = document.createElement('canvas');
+document.body.prepend(canvas);
+const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Math helpers ---
+const PI = Math.PI, TAU = PI * 2;
+const sin = Math.sin, cos = Math.cos, sqrt = Math.sqrt, abs = Math.abs, max = Math.max, min = Math.min;
+const rand = (a=0,b=1) => a + Math.random()*(b-a);
+const clamp = (v,lo,hi) => max(lo,min(hi,v));
+const lerp = (a,b,t) => a + (b-a)*t;
+const mod = (a,n) => ((a%n)+n)%n;
+
+// --- Matrix math (column-major Float32Arrays) ---
+function mat4() { const m = new Float32Array(16); m[0]=m[5]=m[10]=m[15]=1; return m; }
+function mat4Perspective(fov, aspect, near, far) {
+  const m = new Float32Array(16);
+  const f = 1/Math.tan(fov/2);
+  m[0] = f/aspect; m[5] = f; m[10] = (far+near)/(near-far);
+  m[11] = -1; m[14] = 2*far*near/(near-far);
+  return m;
+}
+function mat4Mul(a, b) {
+  const r = new Float32Array(16);
+  for (let i=0;i<4;i++) for (let j=0;j<4;j++) {
+    let s=0; for (let k=0;k<4;k++) s += a[i+k*4]*b[k+j*4]; r[i+j*4]=s;
+  } return r;
+}
+function mat4Translate(m, x, y, z) {
+  const t = mat4(); t[12]=x; t[13]=y; t[14]=z; return mat4Mul(m, t);
+}
+function mat4RotateX(m, a) {
+  const t = mat4(); t[5]=cos(a); t[6]=sin(a); t[9]=-sin(a); t[10]=cos(a); return mat4Mul(m, t);
+}
+function mat4RotateY(m, a) {
+  const t = mat4(); t[0]=cos(a); t[2]=-sin(a); t[8]=sin(a); t[10]=cos(a); return mat4Mul(m, t);
+}
+function mat4RotateZ(m, a) {
+  const t = mat4(); t[0]=cos(a); t[1]=sin(a); t[4]=-sin(a); t[5]=cos(a); return mat4Mul(m, t);
+}
+function mat4Scale(m, x, y, z) {
+  const t = mat4(); t[0]=x; t[5]=y; t[10]=z; return mat4Mul(m, t);
+}
+
+// --- Shader compilation ---
+function compileShader(src, type) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.error(gl.getShaderInfoLog(s)); return null; }
+  return s;
+}
+function createProgram(vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, compileShader(vs, gl.VERTEX_SHADER));
+  gl.attachShader(p, compileShader(fs, gl.FRAGMENT_SHADER));
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { console.error(gl.getProgramInfoLog(p)); return null; }
+  return p;
+}
+
+// --- Main shader (used for all geometry) ---
+const vsMain = `
+  attribute vec3 aPos;
+  attribute vec3 aNorm;
+  uniform mat4 uProj;
+  uniform mat4 uView;
+  uniform mat4 uModel;
+  varying vec3 vNorm;
+  varying vec3 vWorldPos;
+  varying float vDepth;
+  void main() {
+    vec4 world = uModel * vec4(aPos, 1.0);
+    vec4 view = uView * world;
+    gl_Position = uProj * view;
+    vNorm = mat3(uModel) * aNorm;
+    vWorldPos = world.xyz;
+    vDepth = -view.z;
+  }
+`;
+const fsMain = `
+  precision mediump float;
+  varying vec3 vNorm;
+  varying vec3 vWorldPos;
+  varying float vDepth;
+  uniform vec3 uColor;
+  uniform float uEmissive;
+  uniform float uFogDensity;
+  uniform vec3 uFogColor;
+  uniform float uTime;
+  void main() {
+    vec3 n = normalize(vNorm);
+    vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
+    float diff = max(dot(n, lightDir), 0.0) * 0.5 + 0.5;
+    vec3 col = uColor * diff;
+    col += uColor * uEmissive;
+    float fogF = 1.0 - exp(-vDepth * uFogDensity);
+    col = mix(col, uFogColor, clamp(fogF, 0.0, 1.0));
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const prog = createProgram(vsMain, fsMain);
+const aPos = gl.getAttribLocation(prog, 'aPos');
+const aNorm = gl.getAttribLocation(prog, 'aNorm');
+const uProj = gl.getUniformLocation(prog, 'uProj');
+const uView = gl.getUniformLocation(prog, 'uView');
+const uModel = gl.getUniformLocation(prog, 'uModel');
+const uColor = gl.getUniformLocation(prog, 'uColor');
+const uEmissive = gl.getUniformLocation(prog, 'uEmissive');
+const uFogDensity = gl.getUniformLocation(prog, 'uFogDensity');
+const uFogColor = gl.getUniformLocation(prog, 'uFogColor');
+const uTime = gl.getUniformLocation(prog, 'uTime');
+
+// --- Geometry builders ---
+function createBuffer(verts, norms) {
+  const data = new Float32Array(verts.length + norms.length);
+  const count = verts.length / 3;
+  for (let i=0; i<count; i++) {
+    data[i*6]   = verts[i*3];
+    data[i*6+1] = verts[i*3+1];
+    data[i*6+2] = verts[i*3+2];
+    data[i*6+3] = norms[i*3];
+    data[i*6+4] = norms[i*3+1];
+    data[i*6+5] = norms[i*3+2];
+  }
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  return { buf, count };
+}
+
+function makeTunnelRing(radius, length, segments, zOff) {
+  const verts = [], norms = [];
+  for (let i=0; i<segments; i++) {
+    const a0 = (i/segments)*TAU, a1 = ((i+1)/segments)*TAU;
+    const x0 = cos(a0)*radius, y0 = sin(a0)*radius;
+    const x1 = cos(a1)*radius, y1 = sin(a1)*radius;
+    const nx0 = -cos(a0), ny0 = -sin(a0);
+    const nx1 = -cos(a1), ny1 = -sin(a1);
+    // quad as 2 tris (inside-facing normals)
+    verts.push(x0,y0,zOff, x1,y1,zOff, x0,y0,zOff-length);
+    norms.push(nx0,ny0,0, nx1,ny1,0, nx0,ny0,0);
+    verts.push(x1,y1,zOff, x1,y1,zOff-length, x0,y0,zOff-length);
+    norms.push(nx1,ny1,0, nx1,ny1,0, nx0,ny0,0);
+  }
+  return createBuffer(new Float32Array(verts), new Float32Array(norms));
+}
+
+function makeBox(w, h, d) {
+  const hw=w/2, hh=h/2, hd=d/2;
+  const faces = [
+    // front
+    [-hw,-hh,hd, hw,-hh,hd, hw,hh,hd, -hw,-hh,hd, hw,hh,hd, -hw,hh,hd],
+    // back
+    [hw,-hh,-hd, -hw,-hh,-hd, -hw,hh,-hd, hw,-hh,-hd, -hw,hh,-hd, hw,hh,-hd],
+    // top
+    [-hw,hh,hd, hw,hh,hd, hw,hh,-hd, -hw,hh,hd, hw,hh,-hd, -hw,hh,-hd],
+    // bottom
+    [-hw,-hh,-hd, hw,-hh,-hd, hw,-hh,hd, -hw,-hh,-hd, hw,-hh,hd, -hw,-hh,hd],
+    // right
+    [hw,-hh,hd, hw,-hh,-hd, hw,hh,-hd, hw,-hh,hd, hw,hh,-hd, hw,hh,hd],
+    // left
+    [-hw,-hh,-hd, -hw,-hh,hd, -hw,hh,hd, -hw,-hh,-hd, -hw,hh,hd, -hw,hh,-hd],
+  ];
+  const normals = [[0,0,1],[0,0,-1],[0,1,0],[0,-1,0],[1,0,0],[-1,0,0]];
+  const verts = [], norms = [];
+  for (let f=0; f<6; f++) {
+    for (let v=0; v<6; v++) {
+      verts.push(faces[f][v*3], faces[f][v*3+1], faces[f][v*3+2]);
+      norms.push(normals[f][0], normals[f][1], normals[f][2]);
+    }
+  }
+  return createBuffer(new Float32Array(verts), new Float32Array(norms));
+}
+
+function makeSphere(r, seg) {
+  const verts = [], norms = [];
+  for (let i=0;i<seg;i++) for (let j=0;j<seg;j++) {
+    const t0=PI*i/seg, t1=PI*(i+1)/seg, p0=TAU*j/seg, p1=TAU*(j+1)/seg;
+    const v = (t,p) => [r*sin(t)*cos(p), r*cos(t), r*sin(t)*sin(p)];
+    const n = (t,p) => [sin(t)*cos(p), cos(t), sin(t)*sin(p)];
+    const a=v(t0,p0),b=v(t1,p0),c=v(t1,p1),d=v(t0,p1);
+    const na=n(t0,p0),nb=n(t1,p0),nc=n(t1,p1),nd=n(t0,p1);
+    verts.push(...a,...b,...c,...a,...c,...d);
+    norms.push(...na,...nb,...nc,...na,...nc,...nd);
+  }
+  return createBuffer(new Float32Array(verts), new Float32Array(norms));
+}
+
+function drawMesh(mesh, model, color, emissive) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, mesh.buf);
+  gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 24, 0);
+  gl.vertexAttribPointer(aNorm, 3, gl.FLOAT, false, 24, 12);
+  gl.uniformMatrix4fv(uModel, false, model);
+  gl.uniform3fv(uColor, color);
+  gl.uniform1f(uEmissive, emissive || 0);
+  gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+}
+
+// --- Build geometry ---
+const tunnelSegs = 24;
+const tunnelRadius = 8;
+const tunnelRingLen = 12;
+const tunnelRings = [];
+const numRings = 30;
+for (let i=0;i<numRings;i++) {
+  tunnelRings.push(makeTunnelRing(tunnelRadius, tunnelRingLen, tunnelSegs, 0));
+}
+
+const shipBody = makeBox(0.6, 0.2, 1.4);
+const shipWing = makeBox(1.6, 0.05, 0.7);
+const shipCockpit = makeSphere(0.18, 8);
+const obstacleMesh = makeBox(1.2, 1.2, 1.2);
+const orbMesh = makeSphere(0.35, 8);
+const bulletMesh = makeBox(0.08, 0.08, 0.6);
+const mineMesh = makeBox(1.32, 1.32, 1.32);
+
+// ===== Game State =====
+let gameState = 'menu'; // menu | playing | dead
+let score = 0, distance = 0, shield = 100, bestScore = 0;
+let speed = 0.3, baseSpeed = 0.3, boostSpeed = 0.55;
+let shipX = 0, shipY = 0, shipRoll = 0, shipTargetRoll = 0;
+let camShake = 0;
+let time = 0;
+let gameTime = 0;
+let lastObstacleIncreaseMinute = 0;
+let mineTrackTime = 0;
+let minesToPresent = 0;
+let mineSpawnTimers = [];
+let firstMinuteElapsed = false;
+let debugMode = null;
+let trackerCount = 0;
+let debugMenuSelected = 0;
+let chaosFireTimer = 0;
+const debugModes = ['mines', 'orbs', 'obstacleCollision', 'mineCollision', 'chaos'];
+const debugModeNames = { mines:'MINE FIELD', orbs:'ORB HARVEST', obstacleCollision:'COLLISION COURSE', mineCollision:'MINE SWEEPER', chaos:'CHAOS PROTOCOL' };
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Enter') {
+    if (gameState === 'debugMenu') {
+      startGame(debugModes[debugMenuSelected]);
+    } else if (gameState !== 'playing') {
+      startGame();
+    }
+  }
+  if (gameState === 'debugMenu') {
+    if (e.code === 'ArrowUp') {
+      debugMenuSelected = (debugMenuSelected - 1 + debugModes.length) % debugModes.length;
+      updateDebugMenuSelection();
+      e.preventDefault();
+    } else if (e.code === 'ArrowDown') {
+      debugMenuSelected = (debugMenuSelected + 1) % debugModes.length;
+      updateDebugMenuSelection();
+      e.preventDefault();
+    } else if (e.code === 'Digit1') { startGame(debugModes[0]); }
+    else if (e.code === 'Digit2') { startGame(debugModes[1]); }
+    else if (e.code === 'Digit3') { startGame(debugModes[2]); }
+    else if (e.code === 'Digit4') { startGame(debugModes[3]); }
+    else if (e.code === 'Digit5') { startGame(debugModes[4]); }
+  }
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+document.getElementById('start-btn').addEventListener('click', () => { if (gameState !== 'playing') startGame(); });
+
+function showDebugMenu() {
+  gameState = 'debugMenu';
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('debug-overlay').classList.remove('hidden');
+  debugMenuSelected = 0;
+  updateDebugMenuSelection();
+}
+
+function updateDebugMenuSelection() {
+  const options = document.querySelectorAll('.debug-option');
+  options.forEach((opt, i) => {
+    if (i === debugMenuSelected) opt.classList.add('selected');
+    else opt.classList.remove('selected');
+  });
+}
+
+// Debug menu click/hover handlers
+document.getElementById('debug-menu').addEventListener('click', function(e) {
+  const option = e.target.closest('.debug-option');
+  if (option) {
+    const index = parseInt(option.dataset.index);
+    startGame(debugModes[index]);
+  }
+});
+document.querySelectorAll('.debug-option').forEach((opt, i) => {
+  opt.addEventListener('mouseenter', () => {
+    if (gameState === 'debugMenu') {
+      debugMenuSelected = i;
+      updateDebugMenuSelection();
+    }
+  });
+});
+
+// Listen for messages from VS Code extension
+window.addEventListener('message', event => {
+  const message = event.data;
+  if (message.command === 'showDebugMenu') {
+    showDebugMenu();
+  }
+});
+
+// Obstacles & pickups
+let obstacles = [];
+let orbs = [];
+let bullets = [];
+let particles = [];
+let mines = [];
+
+function spawnObstacle(z) {
+  const angle = rand(0, TAU);
+  const r = rand(1.5, 4.5);
+  obstacles.push({
+    type: 'block', x: cos(angle)*r, y: sin(angle)*r, z,
+    rot: rand(0,TAU), rotSpeed: rand(-2,2), scale: rand(0.6, 1.5)
+  });
+}
+
+function spawnOrb(z) {
+  const angle = rand(0, TAU);
+  const r = rand(1, 5);
+  orbs.push({ x: cos(angle)*r, y: sin(angle)*r, z, collected: false });
+}
+
+function spawnMine(z) {
+  const angle = rand(0, TAU);
+  const r = rand(1.5, 4.5);
+  mines.push({
+    x: cos(angle)*r, y: sin(angle)*r, z,
+    rot: rand(0,TAU), rotSpeed: rand(-2,2), scale: rand(0.66, 1.65),
+    hp: 5
+  });
+}
+
+function spawnParticles(x, y, z, color, count) {
+  for (let i=0;i<count;i++) {
+    particles.push({
+      x, y, z, vx: rand(-3,3), vy: rand(-3,3), vz: rand(-1,2),
+      life: rand(0.3, 0.8), maxLife: 0.8, color
+    });
+  }
+}
+
+function startGame(mode) {
+  debugMode = mode || null;
+  gameState = 'playing';
+  score = 0; distance = 0; shield = 100;
+  baseSpeed = 0.3; boostSpeed = 0.55; speed = baseSpeed;
+  shipX = 0; shipY = 0; shipRoll = 0;
+  obstacles = []; orbs = []; bullets = []; particles = []; mines = [];
+  gameTime = 0; lastObstacleIncreaseMinute = 0;
+  mineTrackTime = 0; minesToPresent = 0; mineSpawnTimers = []; firstMinuteElapsed = false;
+  trackerCount = 0; chaosFireTimer = 0;
+
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('debug-overlay').classList.add('hidden');
+
+  // Show/hide collision tracker
+  const tracker = document.getElementById('collision-tracker');
+  if (debugMode === 'obstacleCollision' || debugMode === 'mineCollision') {
+    tracker.style.display = 'block';
+    document.getElementById('tracker-display').textContent = 'Collisions Detected: 0';
+  } else if (debugMode === 'chaos') {
+    tracker.style.display = 'block';
+    document.getElementById('tracker-display').textContent = 'Total Destruction: 0';
+  } else {
+    tracker.style.display = 'none';
+  }
+
+  // Show debug mode indicator
+  const indicator = document.getElementById('debug-indicator');
+  if (debugMode) {
+    indicator.textContent = '[ DEBUG: ' + debugModeNames[debugMode] + ' ]';
+    indicator.style.display = 'block';
+  } else {
+    indicator.style.display = 'none';
+  }
+
+  // Spawn entities based on mode
+  if (debugMode === 'mines') {
+    for (let i = 0; i < 40; i++) spawnMine(-i * 10 - 30);
+  } else if (debugMode === 'orbs') {
+    for (let i = 0; i < 100; i++) spawnOrb(-i * 8 - 15);
+  } else if (debugMode === 'obstacleCollision') {
+    for (let i = 0; i < 60; i++) spawnObstacle(-i * 14 - 30);
+  } else if (debugMode === 'mineCollision') {
+    for (let i = 0; i < 40; i++) spawnMine(-i * 10 - 30);
+  } else if (debugMode === 'chaos') {
+    for (let i = 0; i < 120; i++) spawnObstacle(-i * 7 - 20);
+    for (let i = 0; i < 50; i++) spawnOrb(-i * 10 - 15);
+    for (let i = 0; i < 25; i++) spawnMine(-i * 12 - 30);
+  } else {
+    for (let i = 0; i < 60; i++) {
+      spawnObstacle(-i * 14 - 30);
+      if (Math.random() < 0.4) spawnOrb(-i * 14 - 20);
+    }
+  }
+}
+
+function endGame() {
+  gameState = 'dead';
+  bestScore = max(bestScore, score);
+  const overlay = document.getElementById('overlay');
+
+  let statsHtml = '';
+  if (debugMode === 'obstacleCollision' || debugMode === 'mineCollision') {
+    statsHtml = `
+      <div class="final-score">${trackerCount}</div>
+      <div class="stats">
+        Collisions Detected: <span>${trackerCount}</span><br/>
+        Distance: <span>${(distance/10).toFixed(1)} km</span>
+      </div>`;
+  } else if (debugMode === 'chaos') {
+    statsHtml = `
+      <div class="final-score">${score}</div>
+      <div class="stats">
+        Total Destruction: <span>${trackerCount}</span><br/>
+        Score: <span>${score}</span><br/>
+        Distance: <span>${(distance/10).toFixed(1)} km</span>
+      </div>`;
+  } else {
+    statsHtml = `
+      <div class="final-score">${score}</div>
+      <div class="stats">
+        Distance: <span>${(distance/10).toFixed(1)} km</span><br/>
+        Best Score: <span>${bestScore}</span>
+      </div>`;
+  }
+
+  overlay.innerHTML = `
+    <h1>WARP FAILED</h1>
+    <div class="subtitle">SHIP INTEGRITY COMPROMISED</div>
+    ${statsHtml}
+    <div class="start-prompt" id="start-btn">[ PRESS ENTER TO RELAUNCH ]</div>
+  `;
+  overlay.classList.remove('hidden');
+  document.getElementById('collision-tracker').style.display = 'none';
+  document.getElementById('debug-indicator').style.display = 'none';
+  document.getElementById('start-btn').addEventListener('click', () => { if (gameState !== 'playing') startGame(); });
+  // Notify VS Code host
+  try {
+    const vscode = acquireVsCodeApi();
+    vscode.postMessage({ command: 'showScore', score });
+  } catch(e) {}
+}
+
+// ===== Main loop =====
+let lastTime = performance.now();
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = min((now - lastTime)/1000, 0.05);
+  lastTime = now;
+  time += dt;
+
+  resize();
+  gl.clearColor(0.01, 0.01, 0.06, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.useProgram(prog);
+  gl.enableVertexAttribArray(aPos);
+  gl.enableVertexAttribArray(aNorm);
+
+  const aspect = canvas.width / canvas.height;
+  const proj = mat4Perspective(1.2, aspect, 0.1, 500);
+  gl.uniformMatrix4fv(uProj, false, proj);
+  gl.uniform1f(uFogDensity, 0.012);
+  gl.uniform3fv(uFogColor, [0.01, 0.01, 0.06]);
+  gl.uniform1f(uTime, time);
+
+  if (gameState === 'playing') {
+    updateGame(dt);
+  }
+
+  // Camera
+  let cx = gameState === 'playing' ? shipX * 0.15 : sin(time*0.2)*2;
+  let cy = gameState === 'playing' ? shipY * 0.15 + 0.8 : cos(time*0.15)*1.5 + 1.5;
+  let cz = 8;
+  if (camShake > 0) {
+    cx += rand(-camShake, camShake);
+    cy += rand(-camShake, camShake);
+    camShake *= 0.9;
+  }
+  let view = mat4();
+  view = mat4Translate(view, -cx, -cy, -cz);
+  view = mat4RotateZ(view, gameState === 'playing' ? -shipRoll * 0.15 : sin(time*0.3)*0.05);
+
+  gl.uniformMatrix4fv(uView, false, view);
+
+  // Draw tunnel
+  renderTunnel();
+
+  // Draw game objects
+  if (gameState === 'playing' || gameState === 'dead') {
+    renderShip();
+    renderObstacles();
+    renderMines();
+    renderOrbs();
+    renderBullets();
+    renderParticles(dt);
+  }
+
+  // HUD
+  updateHUD();
+}
+
+function updateGame(dt) {
+  // Ship movement
+  const moveSpeed = 8;
+  if (keys['KeyA'] || keys['ArrowLeft'])  { shipX -= moveSpeed * dt; shipTargetRoll = 0.5; }
+  else if (keys['KeyD'] || keys['ArrowRight']) { shipX += moveSpeed * dt; shipTargetRoll = -0.5; }
+  else { shipTargetRoll = 0; }
+  if (keys['KeyW'] || keys['ArrowUp'])    shipY += moveSpeed * dt;
+  if (keys['KeyS'] || keys['ArrowDown'])  shipY -= moveSpeed * dt;
+
+  // Barrel roll
+  if (keys['KeyQ']) shipTargetRoll = 3;
+  if (keys['KeyE']) shipTargetRoll = -3;
+
+  shipRoll = lerp(shipRoll, shipTargetRoll, 6 * dt);
+
+  // Boost (chaos mode = permanent boost)
+  if (debugMode === 'chaos') {
+    speed = lerp(speed, boostSpeed, 3 * dt);
+    document.getElementById('speed-lines').style.opacity = '0.3';
+  } else if (keys['ShiftLeft'] || keys['ShiftRight']) {
+    speed = lerp(speed, boostSpeed, 3 * dt);
+    document.getElementById('speed-lines').style.opacity = '0.3';
+  } else {
+    speed = lerp(speed, baseSpeed, 2 * dt);
+    document.getElementById('speed-lines').style.opacity = '0';
+  }
+
+  // Constrain to tunnel
+  const maxR = tunnelRadius - 1.5;
+  const dist = sqrt(shipX*shipX + shipY*shipY);
+  if (dist > maxR) {
+    const a = Math.atan2(shipY, shipX);
+    shipX = cos(a) * maxR;
+    shipY = sin(a) * maxR;
+  }
+
+  // Fire bullets
+  if (keys['Space']) {
+    keys['Space'] = false;
+    bullets.push({ x: shipX, y: shipY, z: -2, life: 2 });
+    bullets.push({ x: shipX-0.25, y: shipY-0.05, z: -1.5, life: 2 });
+    bullets.push({ x: shipX+0.25, y: shipY-0.05, z: -1.5, life: 2 });
+  }
+
+  // Chaos mode auto-fire
+  if (debugMode === 'chaos') {
+    chaosFireTimer += dt;
+    if (chaosFireTimer >= 0.12) {
+      chaosFireTimer = 0;
+      bullets.push({ x: shipX, y: shipY, z: -2, life: 2 });
+      bullets.push({ x: shipX-0.25, y: shipY-0.05, z: -1.5, life: 2 });
+      bullets.push({ x: shipX+0.25, y: shipY-0.05, z: -1.5, life: 2 });
+    }
+  }
+
+  // Move objects toward player
+  const advance = speed * 60 * dt;
+  distance += advance;
+
+  // Score increases with distance (skip for collision tracking modes)
+  if (debugMode !== 'obstacleCollision' && debugMode !== 'mineCollision') {
+    score += Math.floor(advance * 10 * (speed/baseSpeed));
+  }
+
+  // Gradually increase difficulty
+  baseSpeed = 0.3 + distance * 0.00002;
+  boostSpeed = baseSpeed * 1.8;
+
+  // Track game time
+  gameTime += dt;
+
+  // Increase obstacles by 10% every minute (only if obstacles active)
+  if (!debugMode || debugMode === 'obstacleCollision' || debugMode === 'chaos') {
+    const currentMinute = Math.floor(gameTime / 60);
+    if (currentMinute > lastObstacleIncreaseMinute) {
+      const newCount = Math.ceil(obstacles.length * 0.1);
+      for (let i = 0; i < newCount; i++) {
+        spawnObstacle(-rand(30, numRings * 14));
+      }
+      lastObstacleIncreaseMinute = currentMinute;
+    }
+  }
+
+  // Mine spawning logic (only if mines active)
+  if (!debugMode || debugMode === 'mines' || debugMode === 'mineCollision' || debugMode === 'chaos') {
+    if (debugMode === 'mines' || debugMode === 'mineCollision' || debugMode === 'chaos') {
+      // Debug modes: spawn mines on a fast timer, no 60s wait
+      mineTrackTime += dt;
+      if (mineTrackTime >= 5) {
+        mineTrackTime = 0;
+        const count = debugMode === 'chaos' ? 3 : 2;
+        for (let i = 0; i < count; i++) {
+          spawnMine(-rand(30, 60));
+        }
+      }
+    } else {
+      // Normal mine spawning
+      mineTrackTime += dt;
+      if (!firstMinuteElapsed) {
+        if (mineTrackTime >= 60) {
+          firstMinuteElapsed = true;
+          mineTrackTime = 0;
+          minesToPresent += 1;
+          mineSpawnTimers = [];
+          for (let i = 0; i < minesToPresent; i++) {
+            mineSpawnTimers.push(Math.floor(30 * Math.random()));
+          }
+        }
+      } else {
+        if (mineTrackTime >= 30) {
+          mineTrackTime = 0;
+          minesToPresent += 1;
+          mineSpawnTimers = [];
+          for (let i = 0; i < minesToPresent; i++) {
+            mineSpawnTimers.push(Math.floor(30 * Math.random()));
+          }
+        }
+        for (let i = mineSpawnTimers.length - 1; i >= 0; i--) {
+          if (mineTrackTime >= mineSpawnTimers[i]) {
+            spawnMine(-rand(30, 60));
+            mineSpawnTimers.splice(i, 1);
+          }
+        }
+      }
+    }
+  }
+
+  // Update obstacles (only if active)
+  if (!debugMode || debugMode === 'obstacleCollision' || debugMode === 'chaos') {
+    for (let i = obstacles.length-1; i>=0; i--) {
+      const o = obstacles[i];
+      o.z += advance;
+      o.rot += o.rotSpeed * dt;
+      if (o.z > 10) {
+        o.z -= numRings * 14;
+        const angle = rand(0, TAU);
+        const r = rand(1.5, 4.5);
+        o.x = cos(angle)*r;
+        o.y = sin(angle)*r;
+        o.scale = rand(0.6, 1.5);
+      }
+      // Collision with ship
+      if (o.z > -3.5 && o.z < 0.5) {
+        const dx = shipX - o.x, dy = shipY - o.y;
+        const hitR = (o.scale || 1) * 0.7 + 0.35;
+        if (sqrt(dx*dx+dy*dy) < hitR) {
+          if (debugMode === 'obstacleCollision') {
+            trackerCount++;
+            document.getElementById('tracker-display').textContent = 'Collisions Detected: ' + trackerCount;
+            camShake = 0.3;
+            document.getElementById('damage-flash').style.opacity = '0.4';
+            setTimeout(() => document.getElementById('damage-flash').style.opacity = '0', 100);
+            spawnParticles(o.x, o.y, o.z, [1,0.8,0], 12);
+            o.z = -numRings * 14 + rand(-10,10);
+          } else if (debugMode === 'chaos') {
+            camShake = 0.3;
+            spawnParticles(o.x, o.y, o.z, [1,0.3,0], 12);
+            o.z = -numRings * 14 + rand(-10,10);
+          } else {
+            shield -= 25;
+            camShake = 0.5;
+            document.getElementById('damage-flash').style.opacity = '0.6';
+            setTimeout(() => document.getElementById('damage-flash').style.opacity = '0', 150);
+            spawnParticles(o.x, o.y, o.z, [1,0.3,0], 12);
+            o.z = -numRings * 14 + rand(-10,10);
+            if (shield <= 0) { shield = 0; endGame(); return; }
+          }
+        }
+      }
+    }
+  }
+
+  // Update orbs (only if active)
+  if (!debugMode || debugMode === 'orbs' || debugMode === 'chaos') {
+    for (let i = orbs.length-1; i>=0; i--) {
+      const o = orbs[i];
+      o.z += advance;
+      if (o.z > 10) {
+        o.z -= numRings * 14;
+        const angle = rand(0, TAU);
+        const r = rand(1.5, 5);
+        o.x = cos(angle)*r; o.y = sin(angle)*r;
+        o.collected = false;
+      }
+      if (!o.collected && o.z > -3.5 && o.z < 0.5) {
+        const dx = shipX-o.x, dy = shipY-o.y;
+        if (sqrt(dx*dx+dy*dy) < 1.05 + 0.35) {
+          o.collected = true;
+          score += 500;
+          shield = min(100, shield + 10);
+          spawnParticles(o.x, o.y, o.z, [0,1,0.5], 15);
+        }
+      }
+    }
+  }
+
+  // Update mines (only if active)
+  if (!debugMode || debugMode === 'mines' || debugMode === 'mineCollision' || debugMode === 'chaos') {
+    for (let i = mines.length - 1; i >= 0; i--) {
+      const m = mines[i];
+      m.z += advance;
+      m.rot += m.rotSpeed * dt;
+      if (m.z > 10) {
+        if (debugMode === 'mines' || debugMode === 'mineCollision') {
+          // Recycle mine instead of removing
+          m.z = -rand(30, 60);
+          const angle = rand(0, TAU);
+          const r = rand(1.5, 4.5);
+          m.x = cos(angle)*r;
+          m.y = sin(angle)*r;
+          m.hp = 5;
+          continue;
+        }
+        mines.splice(i, 1); continue;
+      }
+      // Mine collision with ship
+      if (m.z > -3.5 && m.z < 0.5) {
+        const dx = shipX - m.x, dy = shipY - m.y;
+        const hitR = (m.scale || 1) * 0.77 + 0.35;
+        if (sqrt(dx*dx+dy*dy) < hitR) {
+          if (debugMode === 'mineCollision') {
+            trackerCount++;
+            document.getElementById('tracker-display').textContent = 'Collisions Detected: ' + trackerCount;
+            camShake = 0.3;
+            document.getElementById('damage-flash').style.opacity = '0.4';
+            setTimeout(() => document.getElementById('damage-flash').style.opacity = '0', 100);
+            spawnParticles(m.x, m.y, m.z, [1,0.5,0], 8);
+            // Recycle mine
+            m.z = -rand(30, 60);
+            const angle = rand(0, TAU);
+            const r = rand(1.5, 4.5);
+            m.x = cos(angle)*r;
+            m.y = sin(angle)*r;
+            m.hp = 5;
+          } else if (debugMode === 'chaos') {
+            camShake = 0.5;
+            spawnParticles(m.x, m.y, m.z, [1,0,0], 20);
+            mines.splice(i, 1);
+          } else {
+            shield -= 35;
+            camShake = 0.7;
+            document.getElementById('damage-flash').style.opacity = '0.8';
+            setTimeout(() => document.getElementById('damage-flash').style.opacity = '0', 200);
+            spawnParticles(m.x, m.y, m.z, [1,0,0], 20);
+            mines.splice(i, 1);
+            if (shield <= 0) { shield = 0; endGame(); return; }
+          }
+        }
+      }
+    }
+  }
+
+  // Update bullets
+  for (let i=bullets.length-1;i>=0;i--) {
+    const b = bullets[i];
+    b.z -= 60 * dt;
+    b.life -= dt;
+    if (b.life <= 0) { bullets.splice(i,1); continue; }
+    // Bullet-obstacle collision (only if obstacles active)
+    let bulletHit = false;
+    if (!debugMode || debugMode === 'obstacleCollision' || debugMode === 'chaos') {
+      for (let j=obstacles.length-1;j>=0;j--) {
+        const o = obstacles[j];
+        const dx = b.x-o.x, dy = b.y-o.y, dz = b.z-o.z;
+        if (sqrt(dx*dx+dy*dy+dz*dz) < (o.scale||1)*1.5) {
+          spawnParticles(o.x, o.y, o.z, [1,0.5,0], 20);
+          if (debugMode === 'chaos') {
+            trackerCount++;
+            document.getElementById('tracker-display').textContent = 'Total Destruction: ' + trackerCount;
+          }
+          if (debugMode !== 'obstacleCollision' && debugMode !== 'mineCollision') {
+            score += 200;
+          }
+          o.z = -numRings*14 + rand(-10,10);
+          bullets.splice(i,1);
+          bulletHit = true;
+          break;
+        }
+      }
+    }
+    if (!bulletHit) {
+      // Bullet-mine collision (only if mines active)
+      if (!debugMode || debugMode === 'mines' || debugMode === 'mineCollision' || debugMode === 'chaos') {
+        for (let j=mines.length-1;j>=0;j--) {
+          const m = mines[j];
+          const dx = b.x-m.x, dy = b.y-m.y, dz = b.z-m.z;
+          if (sqrt(dx*dx+dy*dy+dz*dz) < (m.scale||1)*1.65) {
+            m.hp -= 1;
+            spawnParticles(m.x, m.y, m.z, [1,0,0], 5);
+            if (m.hp <= 0) {
+              spawnParticles(m.x, m.y, m.z, [1,0.2,0], 30);
+              if (debugMode === 'chaos') {
+                trackerCount++;
+                document.getElementById('tracker-display').textContent = 'Total Destruction: ' + trackerCount;
+              }
+              if (debugMode !== 'obstacleCollision' && debugMode !== 'mineCollision') {
+                score += 500;
+              }
+              mines.splice(j, 1);
+            }
+            bullets.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  // Update particles
+  for (let i=particles.length-1;i>=0;i--) {
+    const p = particles[i];
+    p.x += p.vx*dt; p.y += p.vy*dt; p.z += (p.vz+advance)*dt;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i,1);
+  }
+}
+
+function renderTunnel() {
+  const offset = mod(distance, tunnelRingLen);
+  for (let i=0; i<numRings; i++) {
+    const z = -i * tunnelRingLen + offset;
+    let model = mat4();
+    model = mat4Translate(model, 0, 0, z);
+    // Alternate ring colors for neon effect
+    const pulse = sin(time*3 + i*0.5)*0.3+0.7;
+    const ci = i % 3;
+    const colors = [[0.02,0.06*pulse,0.15], [0.04*pulse,0.02,0.12], [0.02,0.03,0.1*pulse]];
+    drawMesh(tunnelRings[i % tunnelRings.length], model, colors[ci], 0.3 + sin(time*2+i)*0.15);
+  }
+  // Neon ring stripes
+  for (let i=0; i<numRings; i+=3) {
+    const z = -i * tunnelRingLen + mod(distance, tunnelRingLen*3);
+    let model = mat4();
+    model = mat4Translate(model, 0, 0, z);
+    model = mat4Scale(model, 1.005, 1.005, 0.05);
+    const glow = sin(time*4 + i)*0.5+0.5;
+    drawMesh(tunnelRings[0], model, [0, glow*0.8, glow], 1.0);
+  }
+}
+
+function renderShip() {
+  let m = mat4();
+  m = mat4Translate(m, shipX, shipY, 0);
+  m = mat4RotateZ(m, shipRoll);
+  m = mat4RotateX(m, sin(time*3)*0.03);
+
+  // Body
+  drawMesh(shipBody, m, [0.15, 0.2, 0.3], 0.2);
+  // Wings
+  let mw = mat4Translate(m, 0, -0.02, -0.15);
+  drawMesh(shipWing, mw, [0.1, 0.15, 0.25], 0.1);
+  // Cockpit
+  let mc = mat4Translate(m, 0, 0.12, 0.35);
+  drawMesh(shipCockpit, mc, [0, 0.8, 1], 0.8);
+
+  // Engine glow
+  let me1 = mat4Translate(m, -0.3, -0.02, -0.75);
+  me1 = mat4Scale(me1, 0.5, 0.5, 1.0 + sin(time*20)*0.3);
+  drawMesh(orbMesh, me1, [0, 0.5, 1], 1.5);
+  let me2 = mat4Translate(m, 0.3, -0.02, -0.75);
+  me2 = mat4Scale(me2, 0.5, 0.5, 1.0 + cos(time*20)*0.3);
+  drawMesh(orbMesh, me2, [0, 0.5, 1], 1.5);
+}
+
+function renderObstacles() {
+  for (const o of obstacles) {
+    if (o.z < -400 || o.z > 15) continue;
+    let m = mat4();
+    m = mat4Translate(m, o.x, o.y, o.z);
+    m = mat4RotateX(m, o.rot);
+    m = mat4RotateY(m, o.rot * 0.7);
+    m = mat4Scale(m, o.scale, o.scale, o.scale);
+    const glow = sin(time*3 + o.z)*0.3 + 0.5;
+    drawMesh(obstacleMesh, m, [0.8*glow, 0.1, 0.2], 0.4);
+  }
+}
+
+function renderMines() {
+  for (const m of mines) {
+    if (m.z < -400 || m.z > 15) continue;
+    let model = mat4();
+    model = mat4Translate(model, m.x, m.y, m.z);
+    model = mat4RotateX(model, m.rot);
+    model = mat4RotateY(model, m.rot * 0.7);
+    model = mat4Scale(model, m.scale, m.scale, m.scale);
+    // Blink between black and red
+    const blink = sin(time * 8) > 0 ? 1 : 0;
+    drawMesh(mineMesh, model, [blink * 0.9, 0, 0], blink * 0.8);
+  }
+}
+
+function renderOrbs() {
+  for (const o of orbs) {
+    if (o.collected || o.z < -400 || o.z > 15) continue;
+    let m = mat4();
+    m = mat4Translate(m, o.x, o.y + sin(time*4+o.x)*0.3, o.z);
+    const s = 0.8 + sin(time*5)*0.2;
+    m = mat4Scale(m, s, s, s);
+    m = mat4RotateY(m, time*3);
+    drawMesh(orbMesh, m, [0, 1, 0.6], 1.2);
+  }
+}
+
+function renderBullets() {
+  for (const b of bullets) {
+    let m = mat4();
+    m = mat4Translate(m, b.x, b.y, b.z);
+    m = mat4Scale(m, 1, 1, 3);
+    drawMesh(bulletMesh, m, [0, 0.8, 1], 2.0);
+  }
+}
+
+function renderParticles(dt) {
+  for (const p of particles) {
+    const s = 0.06 * (p.life / p.maxLife);
+    let m = mat4();
+    m = mat4Translate(m, p.x, p.y, p.z);
+    m = mat4Scale(m, s*5, s*5, s*5);
+    drawMesh(orbMesh, m, p.color, 2.0);
+  }
+}
+
+function updateHUD() {
+  if (debugMode === 'obstacleCollision' || debugMode === 'mineCollision') {
+    document.getElementById('score-val').textContent = '-';
+  } else {
+    document.getElementById('score-val').textContent = score;
+  }
+  document.getElementById('dist-val').textContent = (distance/10).toFixed(1) + ' km';
+  document.getElementById('shield-val').textContent = Math.round(shield) + '%';
+  document.getElementById('shield-bar').style.width = shield + '%';
+  if (shield < 30) {
+    document.getElementById('shield-val').style.color = '#f44';
+    document.getElementById('shield-bar').style.background = 'linear-gradient(90deg, #f44, #f80)';
+  } else {
+    document.getElementById('shield-val').style.color = '#0f8';
+    document.getElementById('shield-bar').style.background = 'linear-gradient(90deg, #0f8, #0ff)';
+  }
+}
+
+// Start render loop
+requestAnimationFrame(frame);
+
+// Check if debug mode was requested on load
+if (window.__showDebugMenu) {
+  showDebugMenu();
+}
+</script>
+</body>
+</html>

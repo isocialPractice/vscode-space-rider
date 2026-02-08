@@ -1,0 +1,40 @@
+{
+  "name": "vscode-space-rider",
+  "displayName": "Space Rider",
+  "description": "A futuristic 3D tunnel flyer game for VS Code. Pilot your ship through an endless neon warp tunnel, dodge obstacles, and chase the high score!",
+  "version": "0.1.0",
+  "publisher": "isocialPractice",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "icon": "icon.png",
+  "contributes": {
+    "commands": [
+      {
+        "command": "spaceRider.start",
+        "title": "Space Rider: Launch Game"
+      },
+      {
+        "command": "spaceRider.debug",
+        "title": "Space Rider: Debug"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^3.0.0"
+  }
+}
