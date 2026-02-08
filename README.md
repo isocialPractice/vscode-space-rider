@@ -4,7 +4,7 @@
 
 A futuristic 3D tunnel flyer game for VS Code. Pilot your ship through an endless neon warp tunnel, dodge obstacles, collect energy orbs, and chase the high score - all without leaving your editor.
 
-`Ctrl + click` to play [game.html](index.html) in the browser.
+`Ctrl + click` to play [game.html](https://isocialpractice.github.io/vscode-space-rider/) in the browser.
 
 ## Features
 
